@@ -61,7 +61,6 @@ public sealed class Pipeline
         ulong lastHash = 0;
         Frame? visionCrop = null;
         bool visionPending = false;
-        const string VisionMarker = "\u0001VLM";
 
         while (!ct.IsCancellationRequested)
         {
@@ -109,7 +108,14 @@ public sealed class Pipeline
                         continue;
                     }
 
-                    bool poor = s.VisionFallback && TextUtil.IsLowQuality(text);
+                    // 又高又窄的框基本就是竖排台词，OCR 对竖排只能读出碎片，
+                    // 这种时候直接交给视觉模型，质量差别很明显。
+                    bool tallNarrow = rw < 420 && rh > rw * 1.8;
+
+                    bool poor = s.VisionFallback
+                                && (TextUtil.IsLowQuality(text)
+                                    || TextUtil.IsVerticalLayout(text)
+                                    || tallNarrow);
 
                     if (text.Length == 0)
                     {
@@ -119,13 +125,21 @@ public sealed class Pipeline
                     }
                     else if (poor)
                     {
-                        // OCR 认得出来但明显不可靠，交给视觉模型直接看图
-                        if (pending != VisionMarker)
+                        // 仍然用 OCR 文本当"这屏变了没有"的判据（画面有雨滴动画，
+                        // 用像素指纹会导致每帧都重发请求），真正发的是图。
+                        if (text != pending)
                         {
-                            pending = VisionMarker;
+                            pending = text;
                             pendingTicks = 0;
                             visionCrop = crop;
-                            _ = _ui.BeginInvoke(() => OcrUpdated?.Invoke("（OCR 结果不可靠，改用图像识别）"));
+                            _ = _ui.BeginInvoke(() =>
+                                OcrUpdated?.Invoke(tallNarrow || TextUtil.IsVerticalLayout(text)
+                                    ? "（竖排文字，改用图像识别）"
+                                    : "（OCR 结果不可靠，改用图像识别）"));
+                        }
+                        else
+                        {
+                            visionCrop = crop;
                         }
                     }
                     else if (text != pending)
@@ -135,7 +149,7 @@ public sealed class Pipeline
                         visionPending = false;
                         _ = _ui.BeginInvoke(() => OcrUpdated?.Invoke(text));
                     }
-                    visionPending = pending == VisionMarker;
+                    visionPending = poor;
                 }
 
                 if (pending.Length > 0 && pending != committed)

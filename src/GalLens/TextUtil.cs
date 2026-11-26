@@ -56,6 +56,16 @@ public static class TextUtil
         return cjk * 100 / s.Length < 30;                 // 文字占比太低，多半是符号噪声
     }
 
+    /// <summary>OCR 结果是「竖排」特征：很多行、每行只有一两个字。</summary>
+    public static bool IsVerticalLayout(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        var lines = s.Split('\n');
+        if (lines.Length < 3) return false;
+        double avg = lines.Average(l => l.Trim().Length);
+        return avg <= 2.0;
+    }
+
     public static bool LooksLikeUiNoise(string s)
     {
         if (s.Length < 2) return true;

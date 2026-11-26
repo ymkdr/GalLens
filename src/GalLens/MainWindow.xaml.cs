@@ -552,9 +552,9 @@ public partial class MainWindow : Window
     {
         var presets = new (string Id, string Note)[]
         {
-            ("deepseek-flash",    "DeepSeek-V4.1-Flash-1017（默认，带视觉）"),
-            ("deepseek-v4-pro",   "DeepSeek-V4-Pro-0813（更强更贵）"),
-            ("qwen-plus",         "阿里云百炼"),
+            ("deepseek-flash",    "DeepSeek · 带视觉"),
+            ("deepseek-v4-pro",   "DeepSeek · 更强"),
+            ("qwen-plus",         "通义千问"),
             ("glm-4-flash",       "智谱"),
             ("moonshot-v1-8k",    "Kimi"),
             ("gpt-4o-mini",       "OpenAI")
@@ -656,7 +656,11 @@ public partial class MainWindow : Window
         _pipeline = new Pipeline(_gameHwnd, _myHwnd, _ocr, () => _settings, Dispatcher, _cache);
         _pipeline.Status += s => StatusText.Text = s;
         _pipeline.OcrUpdated += s => SourceText.Text = TextUtil.ForDisplay(s);
-        _pipeline.TranslationUpdated += s => TargetText.Text = s;
+        _pipeline.TranslationUpdated += s =>
+        {
+            TargetText.Text = s;
+            _overlay?.SetText(s);
+        };
         _pipeline.LatencyMs += ms => LatencyText.Text = ms + " ms";
         _pipeline.Start();
 
@@ -735,10 +739,14 @@ public partial class MainWindow : Window
         if (_overlay == null || _gameHwnd == IntPtr.Zero) return;
         var p = new Native.POINT { X = _settings.RoiX, Y = _settings.RoiY };
         Native.ClientToScreen(_gameHwnd, ref p);
-        _overlay.Place(
-            p.X + _settings.Style.OffsetX,
-            p.Y + _settings.Style.OffsetY,
-            _settings.RoiW,
-            _settings.RoiH);
+
+        // 框选区域可能又窄又高（竖排台词），字幕框固定一个最小宽度，
+        // 并以框的右边缘为锚点向左扩展，否则中文会一个字一行。
+        int width = Math.Max(_settings.RoiW, 560);
+        int height = Math.Max(_settings.RoiH, 120);
+        int x = p.X + _settings.Style.OffsetX - (width - _settings.RoiW);
+        if (x < 0) x = 0;
+
+        _overlay.Place(x, p.Y + _settings.Style.OffsetY, width, height);
     }
 }

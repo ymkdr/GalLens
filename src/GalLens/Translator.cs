@@ -19,7 +19,10 @@ public sealed class Translator
         "3. 保留原文的「」等符号和换行结构。\n" +
         "4. 专有名词严格按【术语表】翻译；表中没有的，人名保留日文原文。\n" +
         "5. 拟声词译成中文习惯表达，不要音译。\n" +
-        "6. 不要把一句话拆成多句，也不要合并上文。";
+        "6. 不要把一句话拆成多句，也不要合并上文。\n" +
+        "7. 输入里可能有 OCR 噪声（只有符号、读不通的假名堆、UI 按钮残留）。\n" +
+        "   这些片段直接跳过，不要照抄进译文。\n" +
+        "8. 译文里不允许出现日文原文；宁可少译，也不要把它原样贴出来。";
 
     public static string BuildUserMessage(string jp, string glossary, IReadOnlyList<(string Jp, string Zh)> context)
     {
@@ -70,19 +73,44 @@ public sealed class Translator
         string jp, string glossary, IReadOnlyList<(string Jp, string Zh)> context,
         string baseUrl, string apiKey, string model, CancellationToken ct)
     {
-        var payload = new
+        var messages = new object[]
         {
-            model,
-            stream = true,
-            temperature = 0.4,
-            max_tokens = 600,
-            messages = new object[]
-            {
-                new { role = "system", content = DefaultSystemPrompt },
-                new { role = "user", content = BuildUserMessage(jp, glossary, context) }
-            }
+            new { role = "system", content = DefaultSystemPrompt },
+            new { role = "user", content = BuildUserMessage(jp, glossary, context) }
         };
-        return PostAsync(payload, baseUrl, apiKey, ct);
+        return PostAsync(BuildPayload(model, messages, 0.4, baseUrl), baseUrl, apiKey, ct);
+    }
+
+    /// <summary>
+    /// DeepSeek 默认开启思考模式，对实时字幕是灾难（每次先想好几秒）。
+    /// 只在 deepseek 官方域名下关闭它，避免给别的服务商塞不认识的字段。
+    /// </summary>
+    private static Dictionary<string, object> BuildPayload(string model, object[] messages, double temperature, string baseUrl)
+    {
+        var payload = new Dictionary<string, object>
+        {
+            ["model"] = model,
+            ["stream"] = true,
+            ["max_tokens"] = 600,
+            ["messages"] = messages
+        };
+
+        if (IsDeepSeek(baseUrl))
+        {
+            payload["thinking"] = new Dictionary<string, object> { ["type"] = "disabled" };
+        }
+        else
+        {
+            payload["temperature"] = temperature;
+        }
+
+        return payload;
+    }
+
+    private static bool IsDeepSeek(string baseUrl)
+    {
+        try { return new Uri(baseUrl).Host.Contains("deepseek", StringComparison.OrdinalIgnoreCase); }
+        catch { return false; }
     }
 
     public IAsyncEnumerable<string> TranslateImageAsync(
@@ -91,31 +119,24 @@ public sealed class Translator
     {
         var dataUrl = "data:image/png;base64," + Convert.ToBase64String(png);
 
-        var payload = new
+        var messages = new object[]
         {
-            model,
-            stream = true,
-            temperature = 0.2,
-            max_tokens = 600,
-            messages = new object[]
+            new { role = "system", content = DefaultSystemPrompt },
+            new
             {
-                new { role = "system", content = DefaultSystemPrompt },
-                new
+                role = "user",
+                content = new object[]
                 {
-                    role = "user",
-                    content = new object[]
-                    {
-                        new { type = "text", text = BuildVisionMessage(glossary, context) },
-                        new { type = "image_url", image_url = new { url = dataUrl, detail } }
-                    }
+                    new { type = "text", text = BuildVisionMessage(glossary, context) },
+                    new { type = "image_url", image_url = new { url = dataUrl, detail } }
                 }
             }
         };
-        return PostAsync(payload, baseUrl, apiKey, ct);
+        return PostAsync(BuildPayload(model, messages, 0.2, baseUrl), baseUrl, apiKey, ct);
     }
 
     private static async IAsyncEnumerable<string> PostAsync(
-        object payload, string baseUrl, string apiKey, [EnumeratorCancellation] CancellationToken ct)
+        Dictionary<string, object> payload, string baseUrl, string apiKey, [EnumeratorCancellation] CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("还没有填写 API Key。");
 

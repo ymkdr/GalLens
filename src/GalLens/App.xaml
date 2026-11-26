@@ -98,6 +98,43 @@
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 
+    <Style TargetType="ContextMenu">
+      <Setter Property="Background" Value="#23232B"/>
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontFamily" Value="Microsoft YaHei UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ContextMenu">
+            <Border Background="{TemplateBinding Background}" BorderBrush="#3A3A46"
+                    BorderThickness="1" CornerRadius="8" Padding="5">
+              <StackPanel IsItemsHost="True"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="MenuItem">
+      <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+      <Setter Property="FontFamily" Value="Microsoft YaHei UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="MenuItem">
+            <Border x:Name="bd" Background="Transparent" CornerRadius="5" Padding="10,7">
+              <ContentPresenter ContentSource="Header" RecognizesAccessKey="False"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#3C3C48"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <Style TargetType="ComboBoxItem">
       <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
       <Setter Property="FontFamily" Value="Microsoft YaHei UI"/>

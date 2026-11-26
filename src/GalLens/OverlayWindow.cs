@@ -140,6 +140,8 @@ public sealed class OverlayWindow : Window
         if (hwnd == IntPtr.Zero) return;
 
         int ex = Native.GetWindowLong(hwnd, Native.GWL_EXSTYLE);
+        IsHitTestVisible = value;
+
         if (value)
         {
             ex &= ~(Native.WS_EX_TRANSPARENT | Native.WS_EX_NOACTIVATE);
@@ -204,6 +206,12 @@ public sealed class OverlayWindow : Window
     public void Place(int x, int y, int w, int h)
     {
         _x = x; _y = y; _w = Math.Max(60, w); _h = Math.Max(40, h);
+
+        // 显式设定 WPF 尺寸，否则窗口会随文字内容撑开
+        var dpi = VisualTreeHelper.GetDpi(this);
+        Width = _w / dpi.DpiScaleX;
+        Height = _h / dpi.DpiScaleY;
+
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd != IntPtr.Zero)
             Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, _x, _y, _w, _h,
