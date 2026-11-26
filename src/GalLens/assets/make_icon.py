@@ -1,13 +1,38 @@
-"""生成原创图标：深色圆角底 + 白色对话气泡 + 两行文字条。
-全部是几何图形，不使用任何字体或第三方素材。"""
+"""生成 GalLens 图标：深色圆角底 + 白色「汉」字。
+
+字体：Ma Shan Zheng（马善政毛笔楷书），SIL Open Font License 1.1
+      https://fonts.google.com/specimen/Ma+Shan+Zheng
+
+font 文件不随仓库分发。重新生成图标前，先下载并设置环境变量：
+    set GALLENS_ICON_FONT=D:\path\MaShanZheng-Regular.ttf
+    python make_icon.py
+"""
 import os
-from PIL import Image, ImageDraw
+import sys
+
+from PIL import Image, ImageDraw, ImageFont
 
 S = 1024
+CHAR = "汉"
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(OUT_DIR, "..", "..", ".."))
 
-c1 = (78, 99, 216)    # 靛蓝
-c2 = (123, 91, 214)   # 紫
+c1 = (66, 84, 196)     # 靛蓝
+c2 = (112, 76, 200)    # 紫
+
+def find_font():
+    env = os.environ.get("GALLENS_ICON_FONT")
+    if env and os.path.isfile(env):
+        return env
+    for p in [
+        os.path.join(ROOT, "_fonts", "MaShanZheng-Regular.ttf"),
+        os.path.join(os.path.expanduser("~"), "MaShanZheng-Regular.ttf"),
+    ]:
+        if os.path.isfile(p):
+            return p
+    sys.exit("找不到字体，请设置 GALLENS_ICON_FONT 指向 MaShanZheng-Regular.ttf")
+
+font_path = find_font()
 
 grad = Image.new("RGB", (S, S))
 gd = ImageDraw.Draw(grad)
@@ -24,29 +49,23 @@ ImageDraw.Draw(mask).rounded_rectangle([0, 0, S - 1, S - 1], radius=int(S * 0.23
 
 img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
 img.paste(grad, (0, 0), mask)
+
 d = ImageDraw.Draw(img)
-
-# 气泡主体
-bx0, by0, bx1, by1 = int(S * 0.16), int(S * 0.27), int(S * 0.84), int(S * 0.64)
-radius = int(S * 0.085)
-d.rounded_rectangle([bx0, by0, bx1, by1], radius=radius, fill=(255, 255, 255, 255))
-
-# 左下角小尾巴
-tail = [
-    (int(S * 0.30), by1 - int(S * 0.012)),
-    (int(S * 0.26), int(S * 0.76)),
-    (int(S * 0.44), by1 - int(S * 0.012)),
-]
-d.polygon(tail, fill=(255, 255, 255, 255))
-
-# 两行“文字条”
-bar = (38, 42, 92, 255)
-d.rounded_rectangle([int(S * 0.25), int(S * 0.355), int(S * 0.75), int(S * 0.415)], radius=int(S * 0.03), fill=bar)
-d.rounded_rectangle([int(S * 0.25), int(S * 0.475), int(S * 0.60), int(S * 0.535)], radius=int(S * 0.03), fill=bar)
+size = int(S * 0.86)
+font = ImageFont.truetype(font_path, size)
+d.text((S / 2, S / 2 + S * 0.015), CHAR, font=font, anchor="mm", fill=(255, 255, 255, 255))
 
 img.resize((256, 256), Image.LANCZOS).save(os.path.join(OUT_DIR, "icon-square.png"))
 
 preview = Image.new("RGBA", (512, 512), (243, 243, 246, 255))
 preview.alpha_composite(img.resize((512, 512), Image.LANCZOS))
-preview.convert("RGB").save(os.path.join(OUT_DIR, "..", "..", "..", "docs", "icon.png"))
-print("ok")
+preview.convert("RGB").save(os.path.join(ROOT, "docs", "icon.png"))
+
+small = Image.new("RGB", (250, 70), (243, 243, 246))
+x = 10
+for px in (64, 48, 32, 16):
+    im = img.resize((px, px), Image.LANCZOS)
+    small.paste(im, (x, (70 - px) // 2), im)
+    x += px + 12
+small.save(os.path.join(ROOT, "docs", "icon-sizes.png"))
+print("ok", os.path.basename(font_path))

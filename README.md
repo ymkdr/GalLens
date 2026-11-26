@@ -140,7 +140,12 @@ dotnet run --project tests/E2E       -c Release   # 全链路：假游戏窗口 
 
 ## 图标
 
-`src/GalLens/assets/` 里的图标是用几何图形程序化生成的原创素材（见 `make_icon.py`），不含任何字体轮廓或第三方美术资源。你可以自由替换。
+图标由 **Ma Shan Zheng（马善政毛笔楷书）** 渲染「汉」字生成，脚本见 `src/GalLens/assets/make_icon.py`。
+
+- 字体采用 **SIL Open Font License 1.1**，允许把字形用于 logo、图标等输出物
+- **字体文件不随仓库分发**（仓库里只有渲染出的 PNG/ICO）。重新生成图标需自行下载字体，并设置环境变量 `GALLENS_ICON_FONT` 指向 ttf
+- 字体主页：https://fonts.google.com/specimen/Ma+Shan+Zheng
+- 不使用任何第三方美术素材或书法作品扫描件
 
 ## 许可证
 
