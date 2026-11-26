@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -110,6 +111,9 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        var version = typeof(MainWindow).Assembly.GetName().Version;
+        VersionText.Text = version == null ? "" : $"v{version.Major}.{version.Minor}.{version.Build}";
+
         var wa = SystemParameters.WorkArea;
         Width = Math.Min(Width, wa.Width - 24);
         Height = Math.Min(Height, wa.Height - 24);
@@ -198,6 +202,20 @@ public partial class MainWindow : Window
     {
         _reallyExit = true;
         Close();
+    }
+
+    private void Author_Click(object sender, MouseButtonEventArgs e)
+    {
+        OpenUrl("https://github.com/ymkdr");
+    }
+
+    internal static void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { }
     }
 
     private void Help_Click(object sender, RoutedEventArgs e)

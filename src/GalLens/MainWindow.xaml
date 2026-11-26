@@ -11,6 +11,8 @@
       <StackPanel Orientation="Horizontal">
         <TextBlock Text="GalLens" FontSize="21" FontWeight="Bold"/>
         <TextBlock Text="屏幕实时汉化" Style="{StaticResource Dim}" VerticalAlignment="Bottom" Margin="8,0,0,3"/>
+        <TextBlock x:Name="VersionText" Style="{StaticResource Dim}" VerticalAlignment="Bottom"
+                   Margin="10,0,0,3" Opacity="0.7"/>
       </StackPanel>
       <Button Content="帮助" Width="64" Height="30" HorizontalAlignment="Right" Click="Help_Click"/>
     </Grid>
@@ -31,7 +33,9 @@
               Margin="8,0,0,0" Click="Vision_Click" IsEnabled="False"/>
       <TextBlock x:Name="StatusText" Grid.Column="3" VerticalAlignment="Center" Margin="14,0,10,0"
                  Style="{StaticResource Dim}" TextTrimming="CharacterEllipsis"/>
-      <TextBlock Grid.Column="4" Text="by ymkdr" Style="{StaticResource Dim}" VerticalAlignment="Center" Opacity="0.55"/>
+      <TextBlock x:Name="AuthorLink" Grid.Column="4" Text="by ymkdr" VerticalAlignment="Center"
+                 FontSize="12" Foreground="#7C9CFF" Cursor="Hand" Opacity="0.85"
+                 MouseLeftButtonUp="Author_Click" ToolTip="打开 GitHub 主页"/>
     </Grid>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

@@ -96,14 +96,28 @@ public sealed class HelpWindow : Window
             Content = "知道了",
             Width = 110,
             Height = 34,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 20, 16)
+            Margin = new Thickness(16, 0, 0, 0)
         };
         close.Click += (_, _) => Close();
 
+        var authorLink = new TextBlock
+        {
+            Text = "作者 ymkdr　·　github.com/ymkdr/GalLens",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x7C, 0x9C, 0xFF)),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        authorLink.MouseLeftButtonUp += (_, _) => MainWindow.OpenUrl("https://github.com/ymkdr/GalLens");
+
+        var footer = new DockPanel { Margin = new Thickness(20, 8, 20, 14) };
+        DockPanel.SetDock(close, Dock.Right);
+        footer.Children.Add(close);
+        footer.Children.Add(authorLink);
+
         var dock = new DockPanel();
-        DockPanel.SetDock(close, Dock.Bottom);
-        dock.Children.Add(close);
+        DockPanel.SetDock(footer, Dock.Bottom);
+        dock.Children.Add(footer);
         dock.Children.Add(scroll);
         Content = dock;
 

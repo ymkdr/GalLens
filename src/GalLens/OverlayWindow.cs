@@ -18,7 +18,7 @@ public sealed class OverlayWindow : Window
 
     private bool _interactive;
     private bool _manual;          // 由按钮锁定的拖动模式
-    private int _x, _y, _w, _h;
+    private int _x = int.MinValue, _y = int.MinValue, _w, _h;
 
     private const int VK_MENU = 0x12;
 
@@ -205,17 +205,25 @@ public sealed class OverlayWindow : Window
 
     public void Place(int x, int y, int w, int h)
     {
-        _x = x; _y = y; _w = Math.Max(60, w); _h = Math.Max(40, h);
+        w = Math.Max(60, w);
+        h = Math.Max(40, h);
+
+        // 位置和尺寸都没变就什么都不做：每 400ms 重复 SetWindowPos 会让
+        // 分层窗口整块重绘，看起来就是闪一下。
+        if (x == _x && y == _y && w == _w && h == _h) return;
+
+        _x = x; _y = y; _w = w; _h = h;
 
         // 显式设定 WPF 尺寸，否则窗口会随文字内容撑开
         var dpi = VisualTreeHelper.GetDpi(this);
-        Width = _w / dpi.DpiScaleX;
-        Height = _h / dpi.DpiScaleY;
+        double dw = _w / dpi.DpiScaleX;
+        double dh = _h / dpi.DpiScaleY;
+        if (Math.Abs(Width - dw) > 0.5) Width = dw;
+        if (Math.Abs(Height - dh) > 0.5) Height = dh;
 
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd != IntPtr.Zero)
-            Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, _x, _y, _w, _h,
-                Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
+            Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, _x, _y, _w, _h, Native.SWP_NOACTIVATE);
     }
 
     public (int X, int Y, int W, int H) GetScreenRect()
@@ -226,12 +234,6 @@ public sealed class OverlayWindow : Window
         return (_x, _y, _w, _h);
     }
 
-    protected override void OnRenderSizeChanged(SizeChangedInfo info)
-    {
-        base.OnRenderSizeChanged(info);
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd != IntPtr.Zero && _w > 0)
-            Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, _x, _y, _w, _h,
-                Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
-    }
+    // 尺寸由 Place() 统一管理，这里不再额外 SetWindowPos，
+    // 否则一次 Place 会触发两次窗口移动，加重闪烁。
 }
