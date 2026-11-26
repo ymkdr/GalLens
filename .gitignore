@@ -1,0 +1,20 @@
+# 构建产物
+/GalLens.exe
+*.zip
+/dist/
+bin/
+obj/
+
+# 用户配置与缓存（绝不应进仓库）
+settings.json
+cache.json
+
+# 测试临时文件
+tests/**/result.txt
+tests/**/crash.txt
+docs/_*.png
+
+# IDE
+.vs/
+*.user
+*.suo
