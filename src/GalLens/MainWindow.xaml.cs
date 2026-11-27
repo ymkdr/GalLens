@@ -38,6 +38,8 @@ public partial class MainWindow : Window
     private bool _reallyExit;
     private bool _balloonShown;
     private bool _overlayVisible = true;
+    private IntPtr _overlayHwnd;
+    private int _inactiveTicks;
     private bool _glossaryExpanded;
     private bool _glossaryEditing;
     private string _gameProcess = "";
@@ -48,6 +50,7 @@ public partial class MainWindow : Window
     private const int HotkeyMove = 0x0B03;
     private const int HotkeyRetranslate = 0x0B04;
     private const int HotkeyVision = 0x0B05;
+    private const int HotkeyHistory = 0x0B06;
     private const uint MOD_ALT = 0x0001;
     private const uint MOD_CONTROL = 0x0002;
 
@@ -74,6 +77,7 @@ public partial class MainWindow : Window
         RegisterHotKey(_myHwnd, HotkeyMove, MOD_ALT, 0x4D);                      // Alt+M
         RegisterHotKey(_myHwnd, HotkeyRetranslate, MOD_CONTROL | MOD_ALT, 0x52); // Ctrl+Alt+R
         RegisterHotKey(_myHwnd, HotkeyVision, MOD_CONTROL | MOD_ALT, 0x56);      // Ctrl+Alt+V
+        RegisterHotKey(_myHwnd, HotkeyHistory, MOD_ALT, 0x48);                   // Alt+H
 
         _tray = new TrayIcon(_myHwnd, Environment.ProcessPath ?? "", "GalLens — 屏幕实时汉化")
         {
@@ -81,6 +85,7 @@ public partial class MainWindow : Window
             OnToggle = () => StartStop_Click(this, new RoutedEventArgs()),
             OnRetranslate = () => Retranslate_Click(this, new RoutedEventArgs()),
             OnVision = () => Vision_Click(this, new RoutedEventArgs()),
+            OnHistory = ShowHistory,
             OnExit = ExitApp,
             ToggleState = () => (_running ? "停止翻译" : "开始翻译",
                                  !_running && _gameHwnd != IntPtr.Zero && _settings.HasRegion)
@@ -103,6 +108,7 @@ public partial class MainWindow : Window
             else if (id == HotkeyMove) { ToggleMove(); handled = true; }
             else if (id == HotkeyRetranslate) { Retranslate_Click(this, new RoutedEventArgs()); handled = true; }
             else if (id == HotkeyVision) { Vision_Click(this, new RoutedEventArgs()); handled = true; }
+            else if (id == HotkeyHistory) { ShowHistory(); handled = true; }
         }
         return IntPtr.Zero;
     }
@@ -136,6 +142,7 @@ public partial class MainWindow : Window
         OpacitySlider.Value = _settings.Style.BackgroundOpacity;
         OutlineCheck.IsChecked = _settings.Style.Outline;
         VisionCheck.IsChecked = _settings.VisionFallback;
+        AutoGlossaryCheck.IsChecked = _settings.AutoGlossary;
         FontSizeText.Text = ((int)_settings.Style.FontSize).ToString();
         OpacityText.Text = _settings.Style.BackgroundOpacity.ToString("0.00");
         UpdateSwatchSelection();
@@ -173,6 +180,7 @@ public partial class MainWindow : Window
         UnregisterHotKey(_myHwnd, HotkeyMove);
         UnregisterHotKey(_myHwnd, HotkeyRetranslate);
         UnregisterHotKey(_myHwnd, HotkeyVision);
+        UnregisterHotKey(_myHwnd, HotkeyHistory);
         _tray?.Dispose();
         AppStorage.SaveSettings(_settings);
         AppStorage.SaveCache(_cache);
@@ -417,6 +425,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void AutoGlossary_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _settings.AutoGlossary = AutoGlossaryCheck.IsChecked == true;
+        ScheduleSave();
+    }
+
+    private void ShowHistory()
+    {
+        var entries = _pipeline?.GetHistory() ?? Array.Empty<(string, string)>();
+        new HistoryWindow(entries.ToList()) { Owner = null }.ShowDialog();
+    }
+
     private void Vision_Changed(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
@@ -468,6 +489,42 @@ public partial class MainWindow : Window
         SaveOverlayOffset();
         MoveButton.Content = "移动字幕位置";
         SetStatus("字幕位置已保存");
+    }
+
+    private void OnTermsFound(List<string> incoming)
+    {
+        var existing = ParseGlossary(_settings.Glossary);
+        var known = new HashSet<string>(existing.Select(x => x.Jp), StringComparer.OrdinalIgnoreCase);
+
+        int added = 0;
+        var lines = new List<string>();
+        foreach (var line in incoming)
+        {
+            var sep = line.IndexOf('=');
+            if (sep <= 0 || sep >= line.Length - 1) continue;
+            var jp = line[..sep].Trim();
+            var zh = line[(sep + 1)..].Trim();
+            if (jp.Length == 0 || zh.Length == 0) continue;
+            if (!known.Add(jp)) continue;
+
+            lines.Add(jp + "=" + zh);
+            added++;
+        }
+
+        if (added == 0) return;
+
+        var merged = string.IsNullOrWhiteSpace(_settings.Glossary)
+            ? string.Join("\n", lines)
+            : _settings.Glossary.TrimEnd() + "\n" + string.Join("\n", lines);
+
+        _settings.Glossary = merged;
+        if (!string.IsNullOrEmpty(_gameProcess))
+            _settings.Glossaries[_gameProcess] = merged;
+
+        GlossaryBox.Text = merged;
+        RefreshGlossaryUi();
+        SetStatus($"自动补充了 {added} 条术语");
+        ScheduleSave();
     }
 
     private void SaveOverlayOffset()
@@ -667,9 +724,14 @@ public partial class MainWindow : Window
         _overlay = new OverlayWindow();
         _overlay.ApplyStyle(_settings.Style);
         _overlay.DragFinished += Overlay_DragFinished;
+        _overlay.HistoryRequested += (_, _) => ShowHistory();
+        _overlay.RetranslateRequested += (_, _) => Retranslate_Click(this, new RoutedEventArgs());
+        _overlay.VisionRequested += (_, _) => Vision_Click(this, new RoutedEventArgs());
         _overlay.SetText("……");
         _overlay.Show();
+        _overlayHwnd = new WindowInteropHelper(_overlay).Handle;   // 必须在 Show 之后，否则为 0
         PositionOverlay();
+        _inactiveTicks = 0;
 
         _pipeline = new Pipeline(_gameHwnd, _myHwnd, _ocr, () => _settings, Dispatcher, _cache);
         _pipeline.Status += s => StatusText.Text = s;
@@ -680,6 +742,7 @@ public partial class MainWindow : Window
             _overlay?.SetText(s);
         };
         _pipeline.LatencyMs += ms => LatencyText.Text = ms + " ms";
+        _pipeline.TermsFound += OnTermsFound;
         _pipeline.Start();
 
         _overlayVisible = true;
@@ -737,7 +800,21 @@ public partial class MainWindow : Window
         if (_overlay == null) return;
 
         var fg = Native.GetForegroundWindow();
-        bool active = fg == _gameHwnd || fg == _myHwnd;
+
+        // 字幕窗口自己也算"合法前台"：按住 Alt 拖动时它会短暂获得焦点，
+        // 不认它的话就会闪一下消失再出现。
+        bool active = fg == _gameHwnd || fg == _myHwnd || fg == _overlayHwnd;
+
+        if (active)
+        {
+            _inactiveTicks = 0;
+        }
+        else if (_overlayVisible)
+        {
+            // 需要连续两次判定为"不在前台"才隐藏，避免焦点抖动导致闪烁
+            if (++_inactiveTicks < 2) return;
+        }
+
         if (active == _overlayVisible) return;
 
         _overlayVisible = active;

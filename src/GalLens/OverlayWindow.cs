@@ -9,6 +9,10 @@ namespace GalLens;
 
 public sealed class OverlayWindow : Window
 {
+    private readonly StackPanel _actions;
+    private readonly Button _historyBtn;
+    private readonly Button _retranslateBtn;
+    private readonly Button _visionBtn;
     private readonly Border _border;
     private readonly Grid _grid;
     private readonly TextBlock _main;
@@ -24,6 +28,9 @@ public sealed class OverlayWindow : Window
 
     /// <summary>松开 Alt、拖动结束时触发，让主窗口保存新位置。</summary>
     public event EventHandler? DragFinished;
+    public event EventHandler? HistoryRequested;
+    public event EventHandler? RetranslateRequested;
+    public event EventHandler? VisionRequested;
     public event EventHandler? Moved;
 
     public OverlayWindow(bool excludeFromCapture = true)
@@ -72,6 +79,47 @@ public sealed class OverlayWindow : Window
         };
         _grid.Children.Add(_main);
 
+        Button MakeAction(string text)
+        {
+            var b = new Button
+            {
+                Content = text,
+                FontSize = 11,
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(0, 0, 6, 0),
+                Background = new SolidColorBrush(Color.FromArgb(140, 20, 20, 28)),
+                Foreground = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xE8)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand
+            };
+            return b;
+        }
+
+        _historyBtn = MakeAction("历史");
+        _retranslateBtn = MakeAction("重译");
+        _visionBtn = MakeAction("图像");
+
+        _historyBtn.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
+        _retranslateBtn.Click += (_, _) => RetranslateRequested?.Invoke(this, EventArgs.Empty);
+        _visionBtn.Click += (_, _) => VisionRequested?.Invoke(this, EventArgs.Empty);
+
+        _actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 0, 0, 6),
+            Visibility = Visibility.Collapsed
+        };
+        _actions.Children.Add(_historyBtn);
+        _actions.Children.Add(_retranslateBtn);
+        _actions.Children.Add(_visionBtn);
+
+        var stack = new StackPanel();
+        stack.Children.Add(_actions);
+        stack.Children.Add(_grid);
+
         _border = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(168, 8, 8, 12)),
@@ -79,12 +127,17 @@ public sealed class OverlayWindow : Window
             Padding = new Thickness(16, 8, 16, 8),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Child = _grid
+            Child = stack
         };
 
         Content = _border;
 
-        MouseLeftButtonDown += (_, _) => { if (_interactive) DragMove(); };
+        MouseLeftButtonDown += (_, e) =>
+        {
+            if (!_interactive) return;
+            if (e.OriginalSource is DependencyObject d && IsInside(d)) return;   // 点的是按钮
+            DragMove();
+        };
         LocationChanged += (_, _) => { if (_interactive) Moved?.Invoke(this, EventArgs.Empty); };
 
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(70) };
@@ -101,6 +154,16 @@ public sealed class OverlayWindow : Window
             try { Native.SetWindowDisplayAffinity(hwnd, 0); } catch { }
         }
         _hoverTimer.Start();
+    }
+
+    private bool IsInside(DependencyObject? node)
+    {
+        while (node != null)
+        {
+            if (ReferenceEquals(node, _actions)) return true;
+            node = VisualTreeHelper.GetParent(node);
+        }
+        return false;
     }
 
     /// <summary>鼠标停在字幕上按住 Alt 时，临时变可拖动；松开自动恢复穿透。</summary>
@@ -147,6 +210,7 @@ public sealed class OverlayWindow : Window
             ex &= ~(Native.WS_EX_TRANSPARENT | Native.WS_EX_NOACTIVATE);
             _border.BorderBrush = new SolidColorBrush(Color.FromRgb(0x7C, 0x9C, 0xFF));
             _border.BorderThickness = new Thickness(2);
+            _actions.Visibility = Visibility.Visible;
             Cursor = Cursors.SizeAll;
             Activate();
         }
@@ -155,6 +219,7 @@ public sealed class OverlayWindow : Window
             ex |= Native.WS_EX_TRANSPARENT | Native.WS_EX_NOACTIVATE;
             _border.BorderBrush = null;
             _border.BorderThickness = new Thickness(0);
+            _actions.Visibility = Visibility.Collapsed;
             Cursor = Cursors.Arrow;
             DragFinished?.Invoke(this, EventArgs.Empty);
         }

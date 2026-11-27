@@ -8,8 +8,8 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>GalLens</AssemblyName>
-    <Version>0.1.2</Version>
-    <FileVersion>0.1.2.0</FileVersion>
+    <Version>0.1.3</Version>
+    <FileVersion>0.1.3.0</FileVersion>
     <RootNamespace>GalLens</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>assets\app.ico</ApplicationIcon>

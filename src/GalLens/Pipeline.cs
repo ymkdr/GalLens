@@ -23,6 +23,17 @@ public sealed class Pipeline
     public event Action<string>? Status;
     public event Action<long>? LatencyMs;
 
+    /// <summary>新识别出的术语（日文=中文）</summary>
+    public event Action<List<string>>? TermsFound;
+
+    private readonly List<(string Jp, string Zh)> _history = new();
+    private readonly List<(string Jp, string Zh)> _pendingTerms = new();
+    private readonly Dictionary<string, (string Zh, int Count)> _termVotes = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _termEmitted = new(StringComparer.Ordinal);
+    private const int TermsBatch = 8;
+
+    public IReadOnlyList<(string Jp, string Zh)> GetHistory() => _history.ToArray();
+
     public Pipeline(IntPtr hwnd, IntPtr ownerHwnd, OcrService ocr,
         Func<AppSettings> settings, Dispatcher ui, Dictionary<string, string> cache)
     {
@@ -155,7 +166,12 @@ public sealed class Pipeline
                 if (pending.Length > 0 && pending != committed)
                 {
                     pendingTicks += changed ? 1 : 2;
-                    if (pendingTicks >= 2)
+
+                    // 已经以句末标点收尾，就不用再等第二帧，省掉一百多毫秒
+                    bool looksComplete = pending.Length > 0 && "。！？!?…」』".IndexOf(pending[^1]) >= 0;
+                    int need = looksComplete && !visionPending ? 1 : 2;
+
+                    if (pendingTicks >= need)
                     {
                         committed = pending;
                         if (visionPending && visionCrop != null)
@@ -171,7 +187,7 @@ public sealed class Pipeline
                     }
                 }
 
-                await Task.Delay(90, ct);
+                await Task.Delay(60, ct);
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex)
@@ -253,6 +269,7 @@ public sealed class Pipeline
                     lock (_saveLock) _cache[jp] = zh;
                     _context.Add((jp, zh));
                     TrimContext();
+                    CommitEntry(jp, zh);
                 }
                 _ = _ui.BeginInvoke(() => LatencyMs?.Invoke(sw.ElapsedMilliseconds));
                 return;
@@ -327,6 +344,7 @@ public sealed class Pipeline
                     lock (_saveLock) _cache[key] = zh;
                     _context.Add(("（图像）", zh));
                     TrimContext();
+                    CommitEntry("（图像）", zh);
                 }
                 _ = _ui.BeginInvoke(() => LatencyMs?.Invoke(sw.ElapsedMilliseconds));
                 return;
@@ -346,6 +364,92 @@ public sealed class Pipeline
                 catch (OperationCanceledException) { return; }
             }
         }
+    }
+
+    /// <summary>
+    /// 模型给的候选术语要过三道筛：长度合理、确实出现在本批原文里、对应的中文也在译文里。
+    /// 再要求它在不同批次里出现两次以上，避免 OCR 错字生成一辈子只用一次的"术语"。
+    /// </summary>
+    private List<string> ValidateTerms(string raw, List<(string Jp, string Zh)> batch)
+    {
+        var jpAll = string.Join("\n", batch.Select(b => b.Jp));
+        var zhAll = string.Join("\n", batch.Select(b => b.Zh));
+        var accepted = new List<string>();
+
+        foreach (var line in raw.Split('\n'))
+        {
+            var text = line.Trim();
+            var sep = text.IndexOf('=');
+            if (sep <= 0 || sep >= text.Length - 1) continue;
+
+            var jp = text[..sep].Trim().Trim('「', '」', '"', '『', '』');
+            var zh = text[(sep + 1)..].Trim().Trim('「', '」', '"', '『', '』');
+
+            if (jp.Length < 2 || jp.Length > 10) continue;
+            if (zh.Length < 1 || zh.Length > 12) continue;
+            if (!jpAll.Contains(jp, StringComparison.Ordinal)) continue;   // 不是 OCR 里真有的词
+            if (!zhAll.Contains(zh, StringComparison.Ordinal)) continue;   // 中文也得对得上
+
+            var count = _termVotes.TryGetValue(jp, out var v) ? v.Count : 0;
+            _termVotes[jp] = (zh, count + 1);
+
+            if (count + 1 >= 2 && _termEmitted.Add(jp))
+                accepted.Add(jp + "=" + zh);
+        }
+
+        return accepted;
+    }
+
+    private void CommitEntry(string jp, string zh)
+    {
+        lock (_history)
+        {
+            _history.Add((jp, zh));
+            if (_history.Count > 80) _history.RemoveAt(0);
+        }
+
+        if (!_settings().AutoGlossary || jp == "（图像）") return;
+
+        lock (_history)
+        {
+            _pendingTerms.Add((jp, zh));
+            if (_pendingTerms.Count < TermsBatch) return;
+        }
+
+        List<(string Jp, string Zh)> batch;
+        lock (_history)
+        {
+            batch = _pendingTerms.ToList();
+            _pendingTerms.Clear();
+        }
+
+        _ = Task.Run(() => ExtractTermsAsync(batch));
+    }
+
+    private async Task ExtractTermsAsync(List<(string Jp, string Zh)> batch)
+    {
+        try
+        {
+            var s = _settings();
+            var sb = new StringBuilder();
+            foreach (var (jp, zh) in batch)
+            {
+                sb.AppendLine("日：" + jp.Replace("\n", " "));
+                sb.AppendLine("中：" + zh.Replace("\n", " "));
+            }
+
+            var result = new StringBuilder();
+            await foreach (var d in new Translator().ExtractTermsAsync(
+                sb.ToString(), s.BaseUrl, s.ApiKey, s.Model, CancellationToken.None))
+            {
+                result.Append(d);
+            }
+
+            var terms = ValidateTerms(result.ToString(), batch);
+            if (terms.Count > 0)
+                _ = _ui.BeginInvoke(() => TermsFound?.Invoke(terms));
+        }
+        catch { /* 术语提取失败不影响主流程 */ }
     }
 
     private void TrimContext()

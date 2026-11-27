@@ -30,6 +30,7 @@ public sealed class TrayIcon : IDisposable
     private const int ID_EXIT = 3;
     private const int ID_RETRANSLATE = 4;
     private const int ID_VISION = 5;
+    private const int ID_HISTORY = 6;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct NOTIFYICONDATA
@@ -81,6 +82,7 @@ public sealed class TrayIcon : IDisposable
     public Action? OnExit { get; init; }
     public Action? OnRetranslate { get; init; }
     public Action? OnVision { get; init; }
+    public Action? OnHistory { get; init; }
 
     /// <summary>菜单里「开始/停止」那一项当前该显示什么。</summary>
     public Func<(string Text, bool Enabled)>? ToggleState { get; init; }
@@ -157,6 +159,7 @@ public sealed class TrayIcon : IDisposable
             {
                 AppendMenuW(menu, MF_STRING, ID_RETRANSLATE, "重译当前句");
                 AppendMenuW(menu, MF_STRING, ID_VISION, "用图像翻译当前画面");
+                AppendMenuW(menu, MF_STRING, ID_HISTORY, "字幕历史");
             }
             AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, "");
             AppendMenuW(menu, MF_STRING, ID_EXIT, "退出 GalLens");
@@ -174,6 +177,7 @@ public sealed class TrayIcon : IDisposable
                 case ID_TOGGLE: OnToggle?.Invoke(); break;
                 case ID_RETRANSLATE: OnRetranslate?.Invoke(); break;
                 case ID_VISION: OnVision?.Invoke(); break;
+                case ID_HISTORY: OnHistory?.Invoke(); break;
                 case ID_EXIT: OnExit?.Invoke(); break;
             }
         }

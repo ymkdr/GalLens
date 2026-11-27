@@ -33,6 +33,9 @@ public sealed class AppSettings
 
     /// <summary>OCR 结果看起来不可靠时，改用图像（视觉）翻译。</summary>
     public bool VisionFallback { get; set; } = true;
+
+    /// <summary>自动从译文里积累术语表。</summary>
+    public bool AutoGlossary { get; set; } = true;
     public string VisionDetail { get; set; } = "auto";
 
     public string TargetProcess { get; set; } = "";

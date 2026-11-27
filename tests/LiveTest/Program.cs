@@ -55,6 +55,7 @@ internal static class Program
         overlay.ApplyStyle(settings.Style);
         overlay.SetText("……");
         overlay.Show();
+        overlay.Interactive = true;   // 让截图里能看到按钮
         var p0 = new Native.POINT { X = settings.RoiX, Y = settings.RoiY };
         Native.ClientToScreen(hwnd, ref p0);
         int w = Math.Max(settings.RoiW, 560);
@@ -69,6 +70,7 @@ internal static class Program
         pipe.TranslationUpdated += s => { W("[zh ] " + s); overlay.SetText(s); };
         pipe.Status += s => W("[sts] " + s);
         pipe.LatencyMs += ms => W("[lat] " + ms + "ms");
+        pipe.TermsFound += list => W("[term] " + string.Join(" | ", list));
 
         pipe.Start();
 

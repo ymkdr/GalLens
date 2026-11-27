@@ -135,6 +135,29 @@ public sealed class Translator
         return PostAsync(BuildPayload(model, messages, 0.2, baseUrl), baseUrl, apiKey, ct);
     }
 
+    /// <summary>从一批「日文-中文」对照里提取专有名词，返回 日文=中文 的行。</summary>
+    public IAsyncEnumerable<string> ExtractTermsAsync(
+        string pairs, string baseUrl, string apiKey, string model, CancellationToken ct)
+    {
+        var messages = new object[]
+        {
+            new
+            {
+                role = "system",
+                content = "你从日文游戏台词和它的中文翻译里提取专有名词。\n" +
+                          "只收三类：人名、地名/组织名、作品自造的设定词。\n" +
+                          "不要收：普通名词、动词、形容词、语气词、代词、只有一两个假名的碎片、" +
+                          "疑似 OCR 错字的词（读不通的假名组合直接跳过）。\n" +
+                          "输出格式：每行一个「日文=中文」，不要编号、不要解释。没有就输出空。"
+            },
+            new { role = "user", content = pairs }
+        };
+
+        var payload = BuildPayload(model, messages, 0.1, baseUrl);
+        payload["max_tokens"] = 300;
+        return PostAsync(payload, baseUrl, apiKey, ct);
+    }
+
     private static async IAsyncEnumerable<string> PostAsync(
         Dictionary<string, object> payload, string baseUrl, string apiKey, [EnumeratorCancellation] CancellationToken ct)
     {

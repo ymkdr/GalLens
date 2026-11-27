@@ -163,6 +163,9 @@
                              VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                  <CheckBox x:Name="AutoGlossaryCheck" Content="自动积累" Foreground="#9A9AA8" FontSize="11"
+                            VerticalAlignment="Center" Margin="0,0,10,0"
+                            Checked="AutoGlossary_Changed" Unchecked="AutoGlossary_Changed"/>
                   <Button x:Name="GlossaryToggleButton" Content="展开" Padding="10,3" FontSize="11"
                           Click="GlossaryToggle_Click"/>
                   <Button x:Name="GlossaryEditButton" Content="编辑" Padding="10,3" FontSize="11"
